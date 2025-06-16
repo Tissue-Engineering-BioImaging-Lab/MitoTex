@@ -1,0 +1,10 @@
+numpy
+pandas
+SimpleITK
+Pillow
+radiomics
+scikit-learn
+scikit-image
+matplotlib
+xlsxwriter
+tk
