@@ -13,7 +13,7 @@ import queue
 import cv2
 from PIL import Image
 
-# ML imports (ensure you have these in your machine_learning_code.py)
+# ML imports: functions from the script machine_learning_code.py
 from machine_learning_code import (
     decisiontree_binary,
     decisiontree_multiclass,
@@ -22,12 +22,28 @@ from machine_learning_code import (
 )
 from RFE_feature_selection import run_rfe_feature_selection  # Custom RFE script
 
-# Helper function to remove 'original_' prefix from column names
+# =============================
+# Helper functions
+# =============================
 def rename_columns(col):
+    """Clean up column names from Pyradiomics output for readability."""
     return col.replace('original_', '') if col.startswith('original_') else col
 
 # Create a binary mask using Otsu thresholding
 def create_thresholded_mask(image_np):
+    """
+    Convert raw microscopy image to a binary mask using Otsu thresholding.
+    
+    Parameters
+    ----------
+    image_np : np.ndarray
+        Numpy array of a single channel image (e.g., mitochondria).
+    
+    Returns
+    -------
+    mask : np.ndarray
+        Binary mask where foreground pixels correspond to structures of interest.
+    """
     if image_np.dtype == np.uint16:
         image_8bit = (image_np / 256).astype(np.uint8)
     elif image_np.dtype == np.uint8:
@@ -40,6 +56,21 @@ def create_thresholded_mask(image_np):
     return mask.astype(np.uint8)
 
 def process_image_file(image_path, extractor):
+    """
+    Extract radiomic features from a single biological image.
+    
+    Parameters
+    ----------
+    image_path : str
+        Path to a TIFF microscopy image.
+    extractor : radiomics.featureextractor.RadiomicsFeatureExtractor
+        Configured Pyradiomics feature extractor.
+    
+    Returns
+    -------
+    dict
+        Extracted features along with image name, ready for tabular output.
+    """
     try:
         image = Image.open(image_path)
         image_np = np.array(image)
@@ -62,8 +93,14 @@ def process_image_file(image_path, extractor):
         logging.error(f"Error processing image '{image_path}': {str(e)}")
         return None
 
-# Main GUI application class
+# =============================
+# Main GUI application
+# =============================
 class RadiomicsApp:
+    """
+    Graphical user interface (GUI) for radiomics feature extraction and ML classification
+    of microscopy images of the mitochondria
+    """
     def __init__(self, root):
         self.root = root
         root.title("Radiomics Texture Analysis Tool")
@@ -126,11 +163,15 @@ class RadiomicsApp:
         self.report_text = tk.Text(root, height=15, width=100)
         self.report_text.grid(row=10, column=0, columnspan=4)
 
-    # Browse
+    # =============================
+    # Directory selection
+    # =============================
     def browse_input(self):
+        """Select folder containing microscopy images."""
         path = filedialog.askdirectory()
         self.input_dir.set(path)
     def browse_output(self):
+        """Select folder where results will be saved."""
         path = filedialog.askdirectory()
         self.output_dir.set(path)
 
@@ -145,6 +186,22 @@ class RadiomicsApp:
 
     # --- Radiomics ---
     def run_analysis(self):
+        """
+        Runs radiomics texture analysis on all images in the input folder.
+
+        Biological context:
+        - Input images may be microscopy images of cells, tissues, or organoids. Analysis has solely been focused on mitochondria
+        - Extracts quantitative features (intensity, texture) to characterize mitochondrial structures.
+        - Saves features for downstream ML classification (e.g., SVM, decision tree).
+
+        Steps:
+        1. Validate input/output folders.
+        2. Find all TIFF files (common microscopy format).
+        3. Initialize radiomics feature extractor with selected feature classes.
+        4. Process each image: threshold to identify foreground, extract features.
+        5. Save aggregated CSV and Excel files (all features + separated by feature class).
+        6. Update GUI progress bar and logging.
+        """
         input_path = self.input_dir.get()
         output_path = self.output_dir.get()
         if not os.path.isdir(input_path) or not os.path.isdir(output_path):
@@ -206,6 +263,15 @@ class RadiomicsApp:
 
     # --- RFE ---
     def handle_rfe_filter(self):
+        """
+        Runs Recursive Feature Elimination (RFE) to select informative features.
+
+        Biological context:
+        - Many radiomic features may be correlated or redundant.
+        - RFE ranks features by importance using a Random Forest classifier.
+        - Top-ranked features correspond to most discriminative biological descriptors.
+        - Reduces feature dimensionality, improving ML interpretability.
+        """
         input_file = filedialog.askopenfilename(filetypes=[("CSV Files","*.csv")])
         if input_file:
             output_dir = filedialog.askdirectory(title="Select Output Directory")
@@ -244,6 +310,14 @@ class RadiomicsApp:
 
     # --- ML ---
     def on_ml_button_click(self):
+        """
+        Executes ML classification (Decision Tree or SVM) on pre-extracted biological features.
+
+        Biological context:
+        - Input CSV contains features extracted from images.
+        - Binary or multiclass classification corresponds to experimental groups such as mitochondrial structure type or applied treatments.
+        - Output includes test set accuracy, cross-validation scores, confusion matrix, and ROC curves.
+        """
         try:
             classifier = self.classifier_var.get()
             data_type = self.data_type_var.get()
