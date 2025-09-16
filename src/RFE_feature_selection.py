@@ -17,12 +17,35 @@ def run_rfe_feature_selection(
     save_summary=True
 ):
     """
-    Performs RFE with Random Forest on the input dataset.
-    Returns:
-      summary_df, reduced_csv_path, summary_csv_path (or None)
-    Also plots:
-      - RFE ranking of all features
-      - Feature importances of selected features
+    Perform Recursive Feature Elimination (RFE) using Random Forest on a biological dataset 
+    focused on mitochondrial texture differences.
+
+    This is intended for microscopy-derived features (e.g., radiomic texture features, shape, intensity) 
+    and selects the most informative features for downstream classification.
+
+    Parameters
+    ----------
+    input_csv : str
+        Path to CSV file containing numeric feature matrix (rows = samples, columns = features + target).
+    output_dir : str
+        Directory to save the reduced dataset and summary.
+    top_k : int
+        Number of top features to retain.
+    n_estimators : int
+        Number of trees in the Random Forest used for ranking features.
+    n_jobs : int
+        Number of parallel jobs for Random Forest.
+    save_summary : bool
+        Whether to save a CSV summary of feature ranking and statistics.
+
+    Returns
+    -------
+    summary_df : pd.DataFrame
+        Table with feature ranks, selection status, importance, and basic statistics.
+    reduced_path : str
+        Path to CSV containing only the top features + target.
+    summary_path : str or None
+        Path to CSV containing the full RFE summary (if save_summary=True).
     """
     try:
         # --- Load dataset ---
