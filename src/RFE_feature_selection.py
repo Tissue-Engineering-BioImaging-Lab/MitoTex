@@ -1,140 +1,265 @@
+# # RFE_feature_selection.py
+# import pandas as pd
+# import numpy as np
+# import os
+# import traceback
+# from sklearn.impute import SimpleImputer
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.feature_selection import RFE
+# from sklearn.ensemble import RandomForestClassifier
+
+# def run_rfe_feature_selection(
+#     input_csv,
+#     output_dir,
+#     top_k=20,
+#     n_estimators=200,
+#     n_jobs=-1,
+#     save_summary=True
+# ):
+#     """
+#     Performs RFE with Random Forest on the input dataset.
+#     Returns:
+#       summary_df, reduced_csv_path, summary_csv_path (or None)
+#     """
+#     try:
+#         # --- Load dataset ---
+#         df = pd.read_csv(input_csv)
+
+#         # keep only numeric columns (features + target)
+#         numeric_df = df.select_dtypes(include=[np.number])
+#         if numeric_df.shape[1] < 2:
+#             raise ValueError("Need at least one feature column and one target column (numeric).")
+
+#         feature_columns = numeric_df.columns[:-1]  # features (names)
+#         target_column = numeric_df.columns[-1]     # label name
+
+#         # Impute missing values (features only) and keep original rows aligned
+#         imputer = SimpleImputer(strategy="mean")
+#         X_imputed = imputer.fit_transform(numeric_df[feature_columns])
+#         y = numeric_df[target_column].values
+
+#         # Drop rows with missing labels (if any)
+#         valid_mask = ~pd.isna(y)
+#         if not valid_mask.all():
+#             X_imputed = X_imputed[valid_mask]
+#             y = y[valid_mask]
+
+#         # Convert y to integer labels when appropriate
+#         try:
+#             y = y.astype(int)
+#         except Exception:
+#             # if casting to int fails keep original (e.g. categorical encoded as other)
+#             pass
+
+#         # Standardize features for RFE (but keep imputed raw X for saving reduced CSV)
+#         X_std = StandardScaler().fit_transform(X_imputed)
+
+#         n_features = X_std.shape[1]
+#         if top_k > n_features:
+#             top_k = n_features
+
+#         # --- Random Forest estimator used inside RFE ---
+#         rf = RandomForestClassifier(n_estimators=n_estimators, random_state=42, n_jobs=n_jobs)
+
+#         # --- RFE ---
+#         rfe = RFE(estimator=rf, n_features_to_select=top_k, step=1)
+#         rfe.fit(X_std, y)
+
+#         support = rfe.support_                      # boolean mask (length = n_features)
+#         ranking = rfe.ranking_                      # ranks for each original feature
+#         selected_idx = np.where(support)[0]         # indices of selected features
+#         selected_features = feature_columns[support]  # names
+
+#         # The final estimator inside RFE is fitted to the selected features.
+#         # Its feature_importances_ length == top_k, so map them back to the selected feature names.
+#         final_importances = rfe.estimator_.feature_importances_
+#         # Build a Series aligned with all original features (NaN for unselected features)
+#         importances_full = pd.Series(data=np.nan, index=feature_columns)
+#         importances_full.iloc[selected_idx] = final_importances
+
+#         # Stats for selected features (use imputed but unscaled X for interpretable values)
+#         mean_vals = np.mean(X_imputed[:, selected_idx], axis=0)
+#         std_vals  = np.std(X_imputed[:, selected_idx], axis=0)
+#         min_vals  = np.min(X_imputed[:, selected_idx], axis=0)
+#         max_vals  = np.max(X_imputed[:, selected_idx], axis=0)
+
+#         summary_df = pd.DataFrame({
+#             "Feature": feature_columns,
+#             "Rank": ranking,
+#             "Selected": support,
+#             "Importance": importances_full.values
+#         })
+
+#         # Add per-selected-feature stats (for selected ones only)
+#         stats_df = pd.DataFrame({
+#             "Feature": selected_features,
+#             "Mean": mean_vals,
+#             "Std": std_vals,
+#             "Min": min_vals,
+#             "Max": max_vals
+#         })
+
+#         # Merge summary_df with stats (stats will be NaN for non-selected)
+#         summary_df = summary_df.merge(stats_df, on="Feature", how="left")
+#         # Sort by rank (best rank = 1 at top)
+#         summary_df = summary_df.sort_values(by="Rank").reset_index(drop=True)
+
+#         # --- Save reduced dataset (imputed raw values, selected features) ---
+#         os.makedirs(output_dir, exist_ok=True)
+#         base_name = os.path.splitext(os.path.basename(input_csv))[0]
+#         reduced_path = os.path.join(output_dir, f"Top_{top_k}_RFE_{base_name}.csv")
+#         reduced_df = pd.DataFrame(X_imputed[:, selected_idx], columns=selected_features)
+#         reduced_df[target_column] = y
+#         reduced_df.to_csv(reduced_path, index=False)
+
+#         summary_path = None
+#         if save_summary:
+#             summary_path = os.path.join(output_dir, f"RFE_summary_{base_name}.csv")
+#             summary_df.to_csv(summary_path, index=False)
+
+#         return summary_df, reduced_path, summary_path
+
+#     except Exception:
+#         tb = traceback.format_exc()
+#         raise RuntimeError(f"RFE failed: {tb}")
 # RFE_feature_selection.py
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import RFE
-from sklearn.ensemble import RandomForestClassifier
 import os
 import traceback
+import matplotlib.pyplot as plt
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import RFE
+from sklearn.ensemble import RandomForestClassifier
 
 def run_rfe_feature_selection(
     input_csv,
     output_dir,
     top_k=20,
-    rf_only=False,
-    n_estimators=100,
-    n_jobs=1,
-    step=None,
+    n_estimators=200,
+    n_jobs=-1,
     save_summary=True
 ):
     """
+    Performs RFE with Random Forest on the input dataset.
     Returns:
       summary_df, reduced_csv_path, summary_csv_path (or None)
+    Also plots:
+      - RFE ranking of all features
+      - Feature importances of selected features
     """
     try:
-        # --- load & basic checks ---
+        # --- Load dataset ---
         df = pd.read_csv(input_csv)
+
+        # keep only numeric columns (features + target)
         numeric_df = df.select_dtypes(include=[np.number])
         if numeric_df.shape[1] < 2:
             raise ValueError("Need at least one feature column and one target column (numeric).")
 
-        feature_columns = list(numeric_df.columns[:-1])  # features
-        target_column = numeric_df.columns[-1]           # last numeric column assumed target
+        feature_columns = numeric_df.columns[:-1]  # features (names)
+        target_column = numeric_df.columns[-1]     # label name
 
-        # --- impute features ---
-        X = SimpleImputer(strategy='mean').fit_transform(numeric_df[feature_columns])
-
-        # --- handle labels (drop NaNs, keep values intact) ---
+        # Impute missing values (features only)
+        imputer = SimpleImputer(strategy="mean")
+        X_imputed = imputer.fit_transform(numeric_df[feature_columns])
         y = numeric_df[target_column].values
+
+        # Drop rows with missing labels (if any)
         valid_mask = ~pd.isna(y)
-        X = X[valid_mask]
-        y = y[valid_mask].astype(int)  # force to int if numeric
+        if not valid_mask.all():
+            X_imputed = X_imputed[valid_mask]
+            y = y[valid_mask]
 
-        if X.size == 0:
-            raise ValueError("No valid feature rows after cleaning.")
+        # Convert y to integer labels when appropriate
+        try:
+            y = y.astype(int)
+        except Exception:
+            pass
 
-        # --- standardize ---
-        X_std = StandardScaler().fit_transform(X)
+        # Standardize features for RFE
+        X_std = StandardScaler().fit_transform(X_imputed)
         n_features = X_std.shape[1]
-
-        # make sure top_k is valid
-        if top_k <= 0:
-            raise ValueError("top_k must be > 0")
         if top_k > n_features:
             top_k = n_features
 
-        # choose sensible integer step
-        if step is None:
-            step = 1 if n_features <= 50 else max(1, n_features // 10)
+        # --- Random Forest estimator used inside RFE ---
+        rf = RandomForestClassifier(n_estimators=n_estimators, random_state=42, n_jobs=n_jobs)
 
-        # --- prepare model ---
-        model = RandomForestClassifier(n_estimators=n_estimators, random_state=42, n_jobs=n_jobs)
+        # --- RFE ---
+        rfe = RFE(estimator=rf, n_features_to_select=top_k, step=1)
+        rfe.fit(X_std, y)
 
-        # --- RF-only path ---
-        if rf_only:
-            model.fit(X_std, y)
-            importances = model.feature_importances_
-            indices = np.argsort(importances)[::-1][:top_k]
-            selected_mask = np.zeros(n_features, dtype=bool)
-            selected_mask[indices] = True
+        support = rfe.support_                      # boolean mask (length = n_features)
+        ranking = rfe.ranking_                      # ranks for each original feature
+        selected_idx = np.where(support)[0]         # indices of selected features
+        selected_features = feature_columns[support]  # names
 
-            selected_features = [feature_columns[i] for i in indices]
-            final_importances = importances[indices]
-            means = X_std[:, indices].mean(axis=0)
-            stds = X_std[:, indices].std(axis=0)
-            mins = X_std[:, indices].min(axis=0)
-            maxs = X_std[:, indices].max(axis=0)
+        # Feature importances from RFE estimator
+        final_importances = rfe.estimator_.feature_importances_
+        importances_full = pd.Series(data=np.nan, index=feature_columns)
+        importances_full.iloc[selected_idx] = final_importances
 
-            summary = pd.DataFrame({
-                "Feature": selected_features,
-                "Importance": final_importances,
-                "Mean": means,
-                "Std": stds,
-                "Min": mins,
-                "Max": maxs
-            }).sort_values(by="Importance", ascending=False).reset_index(drop=True)
+        # Stats for selected features
+        mean_vals = np.mean(X_imputed[:, selected_idx], axis=0)
+        std_vals  = np.std(X_imputed[:, selected_idx], axis=0)
+        min_vals  = np.min(X_imputed[:, selected_idx], axis=0)
+        max_vals  = np.max(X_imputed[:, selected_idx], axis=0)
 
-            reduced_df = pd.DataFrame(X[:, indices], columns=selected_features)
-            reduced_df[target_column] = y
-        else:
-            # --- RFE path ---
-            rfe = RFE(estimator=model, n_features_to_select=top_k, step=step)
-            rfe.fit(X_std, y)
+        summary_df = pd.DataFrame({
+            "Feature": feature_columns,
+            "Rank": ranking,
+            "Selected": support,
+            "Importance": importances_full.values
+        })
 
-            support = rfe.support_
-            if not hasattr(rfe, "estimator_"):
-                raise RuntimeError("RFE did not produce a fitted estimator_.")
-            final_model = rfe.estimator_
-            final_importances = getattr(final_model, "feature_importances_", None)
+        stats_df = pd.DataFrame({
+            "Feature": selected_features,
+            "Mean": mean_vals,
+            "Std": std_vals,
+            "Min": min_vals,
+            "Max": max_vals
+        })
 
-            selected_idx = np.where(support)[0]
-            selected_features = [feature_columns[i] for i in selected_idx]
+        summary_df = summary_df.merge(stats_df, on="Feature", how="left")
+        summary_df = summary_df.sort_values(by="Rank").reset_index(drop=True)
 
-            if final_importances is None:
-                tmp_clf = RandomForestClassifier(n_estimators=n_estimators, random_state=42, n_jobs=n_jobs)
-                tmp_clf.fit(X_std[:, selected_idx], y)
-                final_importances = tmp_clf.feature_importances_
-
-            means = X_std[:, selected_idx].mean(axis=0)
-            stds = X_std[:, selected_idx].std(axis=0)
-            mins = X_std[:, selected_idx].min(axis=0)
-            maxs = X_std[:, selected_idx].max(axis=0)
-
-            summary = pd.DataFrame({
-                "Feature": selected_features,
-                "Importance": final_importances,
-                "Mean": means,
-                "Std": stds,
-                "Min": mins,
-                "Max": maxs
-            }).sort_values(by="Importance", ascending=False).reset_index(drop=True)
-
-            reduced_df = pd.DataFrame(X[:, selected_idx], columns=selected_features)
-            reduced_df[target_column] = y
-
-        # --- save results ---
+        # --- Save reduced dataset ---
         os.makedirs(output_dir, exist_ok=True)
         base_name = os.path.splitext(os.path.basename(input_csv))[0]
-        reduced_path = os.path.join(output_dir, f"Top_{top_k}_RFE_features.csv")
+        reduced_path = os.path.join(output_dir, f"Top_{top_k}_RFE_{base_name}.csv")
+        reduced_df = pd.DataFrame(X_imputed[:, selected_idx], columns=selected_features)
+        reduced_df[target_column] = y
         reduced_df.to_csv(reduced_path, index=False)
 
         summary_path = None
         if save_summary:
             summary_path = os.path.join(output_dir, f"RFE_summary_{base_name}.csv")
-            summary.to_csv(summary_path, index=False)
+            summary_df.to_csv(summary_path, index=False)
 
-        return summary, reduced_path, summary_path
+        # --- PLOTTING ---
+        # RFE ranking plot
+        plt.figure(figsize=(12,6))
+        plt.bar(feature_columns, ranking)
+        plt.xticks(rotation=90)
+        plt.title("RFE Feature Ranking (1 = Best)")
+        plt.xlabel("Feature")
+        plt.ylabel("Rank")
+        plt.tight_layout()
+        plt.show()
+
+        # Feature importance plot
+        plt.figure(figsize=(10,6))
+        plt.bar(selected_features, final_importances)
+        plt.xticks(rotation=90)
+        plt.title("Random Forest Importances (Top Features via RFE)")
+        plt.xlabel("Feature")
+        plt.ylabel("Importance")
+        plt.tight_layout()
+        plt.show()
+
+        return summary_df, reduced_path, summary_path
 
     except Exception:
         tb = traceback.format_exc()

@@ -1,4 +1,3 @@
-# Import necessary libraries for GUI, file handling, radiomics extraction, and machine learning
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 import os
@@ -13,9 +12,15 @@ import threading
 import queue
 import cv2
 from PIL import Image
-from anova_feature_selection import run_anova_filter  # Custom ANOVA filter script
-from machine_learning_code import decisiontree, supervised_vector_machine  # Custom ML script
-from RFE_feature_selection import run_rfe_feature_selection # Custom RFE script
+
+# ML imports (ensure you have these in your machine_learning_code.py)
+from machine_learning_code import (
+    decisiontree_binary,
+    decisiontree_multiclass,
+    svm_binary,
+    svm_multiclass
+)
+from RFE_feature_selection import run_rfe_feature_selection  # Custom RFE script
 
 # Helper function to remove 'original_' prefix from column names
 def rename_columns(col):
@@ -89,7 +94,6 @@ class RadiomicsApp:
 
         # Buttons
         tk.Button(root, text="Run Analysis", command=self.run_analysis_thread).grid(row=3, column=1, pady=10)
-        tk.Button(root, text="Run ANOVA Filter", command=self.handle_anova_filter).grid(row=3, column=2, pady=10)
         tk.Button(root, text="Run RFE Filter", command=self.handle_rfe_filter).grid(row=3, column=3, pady=10)
 
         # Progress bar
@@ -109,6 +113,13 @@ class RadiomicsApp:
         tk.Label(root, text="Select Classifier:").grid(row=6, column=0)
         tk.Radiobutton(root, text="SVM", variable=self.classifier_var, value="svm").grid(row=6, column=1)
         tk.Radiobutton(root, text="Decision Tree", variable=self.classifier_var, value="decision_tree").grid(row=6, column=2)
+
+        # Data type selection (binary vs multiclass)
+        self.data_type_var = tk.StringVar(value="binary")
+        tk.Label(root, text="Select Data Type:").grid(row=7, column=0)
+        tk.Radiobutton(root, text="Binary", variable=self.data_type_var, value="binary").grid(row=7, column=1)
+        tk.Radiobutton(root, text="Multiclass", variable=self.data_type_var, value="multiclass").grid(row=7, column=2)
+
         tk.Button(root, text="Run ML Pipeline", command=lambda: threading.Thread(target=self.on_ml_button_click).start()).grid(row=9, column=0, columnspan=3, pady=10)
 
         # ML report
@@ -193,24 +204,8 @@ class RadiomicsApp:
     def run_analysis_thread(self):
         threading.Thread(target=self.run_analysis, daemon=True).start()
 
-    # --- ANOVA ---
-    def handle_anova_filter(self):
-        input_file = filedialog.askopenfilename(filetypes=[("CSV Files","*.csv")])
-        if input_file:
-            output_dir = filedialog.askdirectory(title="Select Output Directory")
-            if output_dir:
-                self.log("Running ANOVA feature selection...")
-                threading.Thread(
-    target=run_anova_filter,
-    kwargs={'input_csv': input_file, 'output_dir': output_dir, 'top_k': 10},
-    daemon=True
-).start()
-
+    # --- RFE ---
     def handle_rfe_filter(self):
-        from RFE_feature_selection import run_rfe_feature_selection
-        import threading
-        from tkinter import filedialog
-
         input_file = filedialog.askopenfilename(filetypes=[("CSV Files","*.csv")])
         if input_file:
             output_dir = filedialog.askdirectory(title="Select Output Directory")
@@ -226,7 +221,6 @@ class RadiomicsApp:
                             input_file,
                             output_dir,
                             top_k=20,
-                            rf_only=True,      # start with True to test quickly
                             n_estimators=50,
                             n_jobs=1
                         )
@@ -248,45 +242,32 @@ class RadiomicsApp:
 
                 threading.Thread(target=run_and_log, daemon=True).start()
 
-
-
-    def run_rfe_thread(self, input_file, output_dir):
-        try:
-            # Set progress bar to indeterminate while running
-            self.progress.config(mode='indeterminate')
-            self.progress.start(10)  # spin speed
-
-            # Run RFE (single call, fast)
-            run_rfe_feature_selection(input_file, output_dir)
-
-            # Stop progress bar
-            self.progress.stop()
-            self.progress.config(mode='determinate', value=100)
-            self.progress_label.config(text="Progress: 100%")
-            self.log("RFE feature selection completed.")
-        except Exception as e:
-            self.progress.stop()
-            self.progress.config(mode='determinate', value=0)
-            self.progress_label.config(text="Progress: 0%")
-            self.log(f"Error during RFE: {e}")
-
-
-
-
-
     # --- ML ---
     def on_ml_button_click(self):
         try:
             classifier = self.classifier_var.get()
-            self.log(f"Running machine learning pipeline with {classifier.upper()}...")
+            data_type = self.data_type_var.get()
+            self.log(f"Running {data_type.upper()} ML pipeline with {classifier.upper()}...")
             input_csv = filedialog.askopenfilename(filetypes=[("CSV Files","*.csv")])
             if not input_csv:
                 self.log("ML pipeline cancelled: no input file selected.")
                 return
+
+            # Call the appropriate function
             if classifier == "decision_tree":
-                report = decisiontree(input_csv)
-            else:
-                report = supervised_vector_machine(input_csv)
+                if data_type == "binary":
+                    report = decisiontree_binary(input_csv)
+                else:
+                    report = decisiontree_multiclass(input_csv)
+            else:  # SVM
+                if data_type == "binary":
+                    report = svm_binary(input_csv)
+                else:
+                    report = svm_multiclass(input_csv)
+
+            self.report_text.delete(1.0, tk.END)
+            self.report_text.insert(tk.END, report)
+
         except Exception as e:
             self.log(f"Error during ML pipeline: {e}")
 
@@ -300,14 +281,11 @@ class RadiomicsApp:
                     self.progress['value'] = current
                     percent = int((current/total)*100)
                     self.progress_label.config(text=f"Progress: {percent}%")
-                elif isinstance(item, tuple) and item[0]=="rfe":
-                    percent = int(item[1])
-                    self.progress['value'] = percent
-                    self.progress_label.config(text=f"Progress: {percent:.0f}%")
         except queue.Empty:
             pass
         finally:
             self.root.after(100, self.update_progress_from_queue)
+
 
 # Launch GUI
 if __name__ == "__main__":
