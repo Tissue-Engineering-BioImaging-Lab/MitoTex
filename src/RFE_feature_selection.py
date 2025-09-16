@@ -20,9 +20,6 @@ def run_rfe_feature_selection(
     Perform Recursive Feature Elimination (RFE) using Random Forest on a biological dataset 
     focused on mitochondrial texture differences.
 
-    This is intended for microscopy-derived features (e.g., radiomic texture features, shape, intensity) 
-    and selects the most informative features for downstream classification.
-
     Parameters
     ----------
     input_csv : str
