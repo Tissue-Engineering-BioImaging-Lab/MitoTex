@@ -8,7 +8,7 @@ This project uses texture-based image analysis to classify mitochondrial structu
 
 - Python 3.9+
 - Python packages:
-  - numpy
+  - numpy>=1.9.2
   - pandas
   - SimpleITK
   - Pillow
