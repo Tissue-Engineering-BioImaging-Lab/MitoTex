@@ -40,11 +40,11 @@ python Mito_feature_extraction_gui.py
 1. Select input and output file directories
 2. Saves the results in csv and xlsx formats
 
-### Running ANOVA feature selection and Machine learning classification
-1. Run the ANOVA feature selection first
+### Running Recursive Feature Elimination (RFE) feature selection and Machine learning classification
+1. Run the RFE feature selection to select the top 20 features 
 2. Select your labelled csv file and select output directory
-3. To run the machine learning classification, select either decision tree or Support vector machine and run machine learning pipeline
-4. Select the previously outputted ANOVA selected feature csv file 
+3. To run the machine learning classification, select either binary or multiclass decision tree or Support vector machine and run machine learning pipeline
+4. Select the previously outputted RFE selected feature csv file 
 
 
 ---
@@ -102,4 +102,4 @@ NGTDM quantifies the differences between the gray level intensities and the aver
 * Developed as part of Amulya Kaianathbhatta's Masters dissertation at Carleton University. DOI: https://doi.org/10.22215/etd/2024-16247
 * Supervised by Dr. Leila Mostaço-Guidolin in the [Tissue Engineering and BioImaging Lab](https://www.teb-lab.com/)
 * Texture analysis- [PyRadiomics](https://pyradiomics.readthedocs.io/en/latest/)
-* All machine learning and ANOVA filter based feature selection was implemented by Natasha Kunchur
+* All machine learning and RFE filter based feature selection was implemented by Natasha Kunchur
