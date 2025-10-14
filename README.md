@@ -122,6 +122,7 @@ NGTDM quantifies the differences between the gray level intensities and the aver
 [7] Guillaume Thibault, Jesus Angulo, and Fernand Meyer. Advanced statistical matrices for texture characterization: Application to cell classification. IEEE Transactions on Biomedical Engineering, 61(3):630–637, 2014.
 
 [8] M. Amadasun and R. King. Textural features corresponding to textural properties. IEEE Transactions on Systems, Man, and Cybernetics, 19(5):1264–1274, 1989.
+
 ---
 
 ## Acknowledgements
