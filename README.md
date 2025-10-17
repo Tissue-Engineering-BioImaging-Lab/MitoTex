@@ -108,6 +108,7 @@ Once opened, follow the GUI prompts to extract features, perform feature selecti
 **Example output**
 1. Confusion matrix
 ![alt text](image-1.png)
+
 2. AUC-ROC curve
 ![alt text](image-2.png)
 3. Classification report
