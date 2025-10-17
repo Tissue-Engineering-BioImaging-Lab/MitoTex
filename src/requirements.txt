@@ -6,4 +6,4 @@ SimpleITK==2.3.1
 pyradiomics==3.0.1
 Pillow==10.0.0
 opencv-python==4.8.0.74
-ttkbootstrap==2.4.1 
+ttkbootstrap==1.14.7
