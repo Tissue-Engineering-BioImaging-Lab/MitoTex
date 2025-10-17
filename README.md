@@ -18,6 +18,7 @@ This project uses texture-based image analysis to classify mitochondrial structu
     -   matplotlib
     -   xlsxwriter
     -   tk
+    -   ttkbootstrap
 
 Install dependencies with:
 
