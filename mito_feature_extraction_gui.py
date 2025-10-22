@@ -1,29 +1,29 @@
+import sys as sys 
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 import os
-import json
 import logging
 import SimpleITK as sitk
 import radiomics
-from radiomics import featureextractor
+from radiomics.featureextractor import RadiomicsFeatureExtractor as featureextractor
 import pandas as pd
 import numpy as np
 import threading
 import queue
-import cv2
+import cv2 as cv2
 from PIL import Image, ImageTk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import tkinter.font as tkFont
 
 # ML imports: functions from the script machine_learning_code.py
-from machine_learning_code import (
+from src.machine_learning_code import (
     decisiontree_binary,
     decisiontree_multiclass,
     svm_binary,
     svm_multiclass
 )
-from RFE_feature_selection import run_rfe_feature_selection  # Custom RFE script
+from src.RFE_feature_selection import run_rfe_feature_selection  # Custom RFE script
 
 # =============================
 # Helper functions
@@ -36,12 +36,12 @@ def rename_columns(col):
 def create_thresholded_mask(image_np):
     """
     Convert raw microscopy image to a binary mask using Otsu thresholding.
-    
+
     Parameters
     ----------
     image_np : np.ndarray
         Numpy array of a single channel image (e.g., mitochondria).
-    
+
     Returns
     -------
     mask : np.ndarray
@@ -61,37 +61,44 @@ def create_thresholded_mask(image_np):
 def process_image_file(image_path, extractor):
     """
     Extract radiomic features from a single biological image.
-    
+
     Parameters
     ----------
     image_path : str
         Path to a TIFF microscopy image.
     extractor : radiomics.featureextractor.RadiomicsFeatureExtractor
         Configured Pyradiomics feature extractor.
-    
+
     Returns
     -------
     dict
         Extracted features along with image name, ready for tabular output.
     """
     try:
-        image = Image.open(image_path)
-        image_np = np.array(image)
+        image = Image.open( image_path )
+        image_np = np.array( image )
+        
         if image_np.ndim == 3:
             image_np = image_np[:, :, 0]
-        mask_np = create_thresholded_mask(image_np)
-        image_sitk = sitk.GetImageFromArray(image_np)
-        mask_sitk = sitk.GetImageFromArray(mask_np)
-        mask_sitk.CopyInformation(image_sitk)
-        featureVector = extractor.execute(image_sitk, mask_sitk)
+            
+        mask_np = create_thresholded_mask( image_np )
+        image_sitk = sitk.GetImageFromArray( image_np )
+        mask_sitk = sitk.GetImageFromArray( mask_np )
+        mask_sitk.CopyInformation( image_sitk )
+        featureVector = extractor.execute( image_sitk, mask_sitk)
+        
         if 'original_glcm_SumAverage' in featureVector and 'original_glcm_JointAverage' in featureVector:
-            featureVector['original_glcm_SumAverage'] = 2 * featureVector['original_glcm_JointAverage']
-        data = {'Image Name': [os.path.basename(image_path)]}
+            featureVector[ 'original_glcm_SumAverage' ] = 2 * featureVector[ 'original_glcm_JointAverage' ]
+            
+        data = {'Image Name': [ os.path.basename( image_path ) ] }
+        
         for feature_class in ['firstorder', 'glcm', 'glrlm', 'glszm', 'ngtdm', 'gldm']:
             for key, value in featureVector.items():
-                if key.startswith(f'original_{feature_class}_'):
-                    data[key] = [value]
+                if key.startswith( f'original_{feature_class}_' ):
+                    data[ key ] = [ value ]
+                    
         return data
+    
     except Exception as e:
         logging.error(f"Error processing image '{image_path}': {str(e)}")
         return None
@@ -134,118 +141,378 @@ class RadiomicsApp:
         # ---------------------------
         # Title
         # ---------------------------
-        title_lbl = ttk.Label(main_frame, text="MitoTex",
-                              font=("Segoe UI", 18, "bold"), foreground="white")
+        title_lbl = ttk.Label(
+            main_frame, text="MitoTex",
+            font=("Segoe UI", 18, "bold"), foreground="white"
+        )
         title_lbl.pack(pady=(6, 12))
 
         # ---------------------------
         # File selection
         # ---------------------------
-        file_frame = ttk.Labelframe(main_frame, text=" File Selection ", bootstyle="secondary")
-        file_frame.pack(fill="x", padx=6, pady=6)
+        file_frame = ttk.Labelframe(
+            main_frame,
+            text=" File Selection ",
+            bootstyle="secondary"
+        )
+        file_frame.pack(
+            fill="x",
+            padx=6,
+            pady=6
+        )
 
-        input_row = ttk.Frame(file_frame)
-        input_row.pack(fill="x", padx=6, pady=4)
-        ttk.Label(input_row, text="Input Folder:", width=15, foreground="white").pack(side="left")
-        ttk.Entry(input_row, textvariable=self.input_dir).pack(side="left", fill="x", expand=True, padx=4)
-        ttk.Button(input_row, text="Browse", command=self.browse_input, bootstyle="primary-outline").pack(side="left", padx=4)
+        input_row = ttk.Frame( file_frame )
+        input_row.pack(
+            fill="x",
+            padx=6,
+            pady=4
+        )
+        ttk.Label(
+            input_row,
+            text="Input Folder:",
+            width=15,
+            foreground="white"
+        ).pack( side="left" )
+        
+        ttk.Entry(
+            input_row,
+            textvariable=self.input_dir
+        ).pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=4
+        )
+        ttk.Button(
+            input_row,
+            text="Browse",
+            command=self.browse_input,
+            bootstyle="primary-outline"
+        ).pack(
+            side="left",
+            padx=4
+        )
 
         output_row = ttk.Frame(file_frame)
-        output_row.pack(fill="x", padx=6, pady=4)
-        ttk.Label(output_row, text="Output Folder:", width=15, foreground="white").pack(side="left")
-        ttk.Entry(output_row, textvariable=self.output_dir).pack(side="left", fill="x", expand=True, padx=4)
-        ttk.Button(output_row, text="Browse", command=self.browse_output, bootstyle="primary-outline").pack(side="left", padx=4)
+        output_row.pack(
+            fill="x",
+            padx=6,
+            pady=4
+        )
+        ttk.Label(
+            output_row,
+            text="Output Folder:",
+            width=15,
+            foreground="white"
+        ).pack( side="left" )
+        ttk.Entry(
+            output_row,
+            textvariable=self.output_dir
+        ).pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=4
+        )
+        ttk.Button(
+            output_row,
+            text="Browse",
+            command=self.browse_output,
+            bootstyle="primary-outline"
+        ).pack(
+            side="left",
+            padx=4
+        )
 
         # ---------------------------
         # Texture techniques
         # ---------------------------
-        tech_frame = ttk.Labelframe(main_frame, text=" Texture Techniques ", bootstyle="secondary")
-        tech_frame.pack(fill="x", padx=6, pady=6)
-        for idx, (tech, var) in enumerate(self.techniques.items()):
-            ttk.Checkbutton(tech_frame, text=tech.upper(), variable=var, bootstyle="info").grid(row=0, column=idx, padx=6, pady=4)
+        tech_frame = ttk.Labelframe(
+            main_frame,
+            text=" Texture Techniques ",
+            bootstyle="secondary"
+        )
+        tech_frame.pack(
+            fill="x",
+            padx=6,
+            pady=6
+        )
+        
+        for idx, (tech, var) in enumerate( self.techniques.items() ):
+            ttk.Checkbutton(
+                tech_frame,
+                text=tech.upper(),
+                variable=var,
+                bootstyle="info"
+            ).grid(
+                row=0, 
+                column=idx, 
+                padx=6, 
+                pady=4
+            )
 
         # ---------------------------
         # Run buttons
         # ---------------------------
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=6)
-        ttk.Button(btn_frame, text="Run Analysis", command=self.run_analysis_thread, bootstyle="success").pack(side="left", padx=6)
-        ttk.Button(btn_frame, text="Run RFE Filter", command=self.handle_rfe_filter, bootstyle="warning").pack(side="left", padx=6)
+        ttk.Button(
+            btn_frame,
+            text="Run Analysis",
+            command=self.run_analysis_thread,
+            bootstyle="success"
+        ).pack(
+            side="left",
+            padx=6
+        )
+        ttk.Button(
+            btn_frame,
+            text="Run RFE Filter",
+            command=self.handle_rfe_filter,
+            bootstyle="warning"
+        ).pack(
+            side="left",
+            padx=6
+        )
 
         # ---------------------------
         # Progress bar + label
         # ---------------------------
-        prog_frame = ttk.Frame(main_frame)
-        prog_frame.pack(fill="x", pady=6)
-        self.progress = ttk.Progressbar(prog_frame, orient='horizontal', mode='determinate')
-        self.progress.pack(side="left", fill="x", expand=True, padx=4)
-        self.progress_label = ttk.Label(prog_frame, text="Progress: 0%", foreground="white")
-        self.progress_label.pack(side="left", padx=6)
+        prog_frame = ttk.Frame( main_frame )
+        prog_frame.pack(
+            fill="x",
+            pady=6
+        )
+        self.progress = ttk.Progressbar(
+            prog_frame,
+            orient='horizontal',
+            mode='determinate'
+        )
+        self.progress.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=4
+        )
+        self.progress_label = ttk.Label(
+            prog_frame,
+            text="Progress: 0%",
+            foreground="white"
+        )
+        self.progress_label.pack(
+            side="left",
+            padx=6
+        )
         self.progress_queue = queue.Queue()
-        self.root.after(100, self.update_progress_from_queue)
+        self.root.after(
+            100,
+            self.update_progress_from_queue
+        )
 
         # ---------------------------
         # Log area
         # ---------------------------
-        log_frame = ttk.Labelframe(main_frame, text=" Log ", bootstyle="secondary")
-        log_frame.pack(fill="both", expand=True, padx=6, pady=6)
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=12, bg="#111214", fg="white", insertbackground="white")
-        self.log_text.pack(fill="both", expand=True, padx=4, pady=4)
+        log_frame = ttk.Labelframe(
+            main_frame,
+            text=" Log ",
+            bootstyle="secondary"
+        )
+        log_frame.pack(
+            fill="both",
+            expand=True,
+            padx=6,
+            pady=6
+        )
+        self.log_text = scrolledtext.ScrolledText(
+            log_frame,
+            height=12,
+            bg="#111214",
+            fg="white",
+            insertbackground="white"
+        )
+        self.log_text.pack(
+            fill="both",
+            expand=True,
+            padx=4,
+            pady=4
+        )
 
         # ---------------------------
         # ML options
         # ---------------------------
-        ml_frame = ttk.Labelframe(main_frame, text=" Machine Learning ", bootstyle="secondary")
-        ml_frame.pack(fill="x", padx=6, pady=6)
+        ml_frame = ttk.Labelframe(
+            main_frame,
+            text=" Machine Learning ",
+            bootstyle="secondary"
+        )
+        ml_frame.pack(
+            fill="x",
+            padx=6,
+            pady=6
+        )
 
         classifier_frame = ttk.Frame(ml_frame)
         classifier_frame.pack(fill="x", pady=4)
-        ttk.Label(classifier_frame, text="Classifier:", width=12, foreground="white").pack(side="left")
-        ttk.Radiobutton(classifier_frame, text="SVM", variable=self.classifier_var, value="svm", bootstyle="info").pack(side="left", padx=4)
-        ttk.Radiobutton(classifier_frame, text="Decision Tree", variable=self.classifier_var, value="decision_tree", bootstyle="info").pack(side="left", padx=4)
+        ttk.Label(
+            classifier_frame,
+            text="Classifier:",
+            width=12,
+            foreground="white"
+        ).pack(
+            side="left"
+        )
+        ttk.Radiobutton(
+            classifier_frame,
+            text="SVM",
+            variable=self.classifier_var,
+            value="svm",
+            bootstyle="info"
+        ).pack(
+            side="left",
+            padx=4
+        )
+        ttk.Radiobutton(
+            classifier_frame,
+            text="Decision Tree",
+            variable=self.classifier_var,
+            value="decision_tree",
+            bootstyle="info"
+        ).pack(
+            side="left",
+            padx=4
+        )
 
-        type_frame = ttk.Frame(ml_frame)
-        type_frame.pack(fill="x", pady=4)
-        ttk.Label(type_frame, text="Data Type:", width=12, foreground="white").pack(side="left")
-        ttk.Radiobutton(type_frame, text="Binary", variable=self.data_type_var, value="binary", bootstyle="info").pack(side="left", padx=4)
-        ttk.Radiobutton(type_frame, text="Multiclass", variable=self.data_type_var, value="multiclass", bootstyle="info").pack(side="left", padx=4)
+        type_frame = ttk.Frame( ml_frame )
+        type_frame.pack( fill="x", pady=4 )
+        ttk.Label(
+            type_frame,
+            text="Data Type:",
+            width=12,
+            foreground="white"
+        ).pack( side="left" )
+        ttk.Radiobutton(
+            type_frame,
+            text="Binary",
+            variable=self.data_type_var,
+            value="binary",
+            bootstyle="info"
+        ).pack(
+            side="left",
+            padx=4
+        )
+        ttk.Radiobutton(
+            type_frame,
+            text="Multiclass",
+            variable=self.data_type_var,
+            value="multiclass",
+            bootstyle="info"
+        ).pack(
+            side="left",
+            padx=4
+        )
 
-        ttk.Button(ml_frame, text="Run ML Pipeline", command=lambda: threading.Thread(target=self.on_ml_button_click).start(), bootstyle="primary").pack(pady=6)
+        ttk.Button(
+            ml_frame,
+            text="Run ML Pipeline",
+            command=lambda: threading.Thread(
+                target=self.on_ml_button_click
+            ).start(),
+            bootstyle="primary"
+        ).pack(
+            pady=6
+        )
 
         # ---------------------------
         # ML report
         # ---------------------------
-        report_frame = ttk.Labelframe(main_frame, text=" ML Report ", bootstyle="secondary")
-        report_frame.pack(fill="both", expand=True, padx=6, pady=6)
-        mono_font = tkFont.Font(family="Courier New", size=10)
-        self.report_text = tk.Text(report_frame, height=12, bg="#0f1112", fg="white",
-                           insertbackground="white", font=mono_font)
-        self.report_text.pack(fill="both", expand=True, padx=4, pady=4)
+        report_frame = ttk.Labelframe(
+            main_frame,
+            text=" ML Report ",
+            bootstyle="secondary"
+        )
+        report_frame.pack(
+            fill="both",
+            expand=True,
+            padx=6,
+            pady=6
+        )
+        mono_font = tkFont.Font(
+            family="Courier New",
+            size=10
+        )
+        self.report_text = tk.Text(
+            report_frame,
+            height=12,
+            bg="#0f1112",
+            fg="white",
+            insertbackground="white",
+            font=mono_font
+        )
+        self.report_text.pack(
+            fill="both",
+            expand=True,
+            padx=4,
+            pady=4
+        )
 
         # ---------------------------
-        # Bottom frame 
+        # Bottom frame
         # ---------------------------
         bottom_frame = ttk.Frame(main_frame)
         bottom_frame.pack(fill="x", pady=12)
 
+        if sys.platform == "win32":
+            self.logo1_img = Image.open(f"{os.path.dirname(os.path.abspath(__file__))}\doc\logos\TEAMHub.jpg")
+            self.logo2_img = Image.open(f"{os.path.dirname(os.path.abspath(__file__))}\doc\logos\TEBLab.jpg")
+        else:
+            self.logo1_img = Image.open(f"{os.path.dirname(os.path.abspath(__file__))}/doc/logos/TEAMHub.jpg")
+            self.logo2_img = Image.open(f"{os.path.dirname(os.path.abspath(__file__))}/doc/logos/TEBLab.jpg")
         
-        self.logo1_img = Image.open(r"C:\Users\Amulya\Documents\Mitochondrial_Texture_Analysis\src\logos\TEAMHub.jpg")
         self.logo1_img = self.logo1_img.resize((120, 60), Image.Resampling.LANCZOS)
         self.logo1_photo = ImageTk.PhotoImage(self.logo1_img)
 
-        self.logo2_img = Image.open(r"C:\Users\Amulya\Documents\Mitochondrial_Texture_Analysis\src\logos\TEBLab.jpg")
         self.logo2_img = self.logo2_img.resize((120, 60), Image.Resampling.LANCZOS)
         self.logo2_photo = ImageTk.PhotoImage(self.logo2_img)
 
-       
-        ttk.Label(bottom_frame, image=self.logo1_photo).pack(side="left", padx=12, anchor="n")
-        ttk.Label(bottom_frame, image=self.logo2_photo).pack(side="right", padx=12, anchor="n")
 
-        
-        buttons_frame = ttk.Frame(bottom_frame)
+        ttk.Label(
+            bottom_frame,
+            image=self.logo1_photo
+        ).pack(
+            side="left",
+            padx=12,
+            anchor="n"
+        )
+        ttk.Label(
+            bottom_frame,
+            image=self.logo2_photo
+        ).pack(
+            side="right",
+            padx=12,
+            anchor="n"
+        )
+
+
+        buttons_frame = ttk.Frame( bottom_frame )
         buttons_frame.pack(side="top", pady=6)
-        ttk.Button(buttons_frame, text="Start", command=self.run_analysis_thread, bootstyle="success").pack(side="left", padx=12)
-        ttk.Button(buttons_frame, text="Exit", command=root.destroy, bootstyle="danger").pack(side="left", padx=12)
+        ttk.Button(
+            buttons_frame,
+            text="Start",
+            command=self.run_analysis_thread,
+            bootstyle="success"
+        ).pack(
+            side="left",
+            padx=12
+        )
+        ttk.Button(
+            buttons_frame,
+            text="Exit",
+            command=root.destroy,
+            bootstyle="danger"
+        ).pack(
+            side="left",
+            padx=12
+        )
 
     # =============================
     # Directory selection
@@ -254,6 +521,7 @@ class RadiomicsApp:
         """Select folder containing microscopy images."""
         path = filedialog.askdirectory()
         self.input_dir.set(path)
+    
     def browse_output(self):
         """Select folder where results will be saved."""
         path = filedialog.askdirectory()
@@ -286,28 +554,37 @@ class RadiomicsApp:
         5. Save aggregated CSV and Excel files (all features + separated by feature class).
         6. Update GUI progress bar and logging.
         """
+        
         input_path = self.input_dir.get()
         output_path = self.output_dir.get()
-        if not os.path.isdir(input_path) or not os.path.isdir(output_path):
-            messagebox.showerror("Error", "Invalid input/output directory")
+        if not os.path.isdir(input_path) or not os.path.isdir( output_path ):
+            messagebox.showerror( "Error", "Invalid input/output directory" )
             return
 
-        tiff_files = [f for f in os.listdir(input_path) if f.lower().endswith(('.tif', '.tiff'))]
+        tiff_files = [
+            f for f in os.listdir(input_path) if f.lower().endswith(('.tif', '.tiff'))
+        ]
+        
         if not tiff_files:
             self.log("No TIFF files found.")
             return
-
+        
+        # ?? why the logger is declared here?
         self.log(f"Found {len(tiff_files)} TIFF files. Starting analysis...")
         radiomics.setVerbosity(logging.INFO)
         global logger
         logger = radiomics.logger
         logger.setLevel(logging.DEBUG)
-        handler = logging.FileHandler(filename='radiomics_log.txt', mode='w')
-        formatter = logging.Formatter("%(levelname)s:%(name)s: %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        handler = logging.FileHandler( filename='radiomics_log.txt', mode='w' )
+        formatter = logging.Formatter( "%(levelname)s:%(name)s: %(message)s" )
+        handler.setFormatter( formatter )
+        logger.addHandler( handler )
 
-        settings = {'binWidth':25, 'resampledPixelSpacing':None, 'interpolator':sitk.sitkBSpline}
+        settings = {
+            'binWidth':25,
+            'resampledPixelSpacing':None,
+            'interpolator':sitk.sitkBSpline
+        }
         extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
         extractor.disableAllFeatures()
         for fclass in self.get_selected_techniques():
@@ -326,19 +603,44 @@ class RadiomicsApp:
             self.progress_queue.put((i+1, len(tiff_files)))
 
         if result_data:
-            df = pd.concat([pd.DataFrame(d) for d in result_data], ignore_index=True)
+            df = pd.concat(
+                [pd.DataFrame(d) for d in result_data],
+                ignore_index=True
+            )
             df.columns = [rename_columns(c) for c in df.columns]
-            all_csv_path = os.path.join(output_path, 'radiomics_features.csv')
-            df.to_csv(all_csv_path, index=False)
-            all_excel_path = os.path.join(output_path, 'radiomics_features.xlsx')
-            sep_excel_path = os.path.join(output_path, 'radiomics_features_separated.xlsx')
+            all_csv_path = os.path.join( output_path, 'radiomics_features.csv' )
+            df.to_csv( all_csv_path, index=False )
+            all_excel_path = os.path.join(
+                output_path,
+                'radiomics_features.xlsx'
+            )
+            sep_excel_path = os.path.join(
+                output_path,
+                'radiomics_features_separated.xlsx'
+            )
+            
             with pd.ExcelWriter(all_excel_path, engine='xlsxwriter') as writer:
-                df.drop(columns=['Image Name']).to_excel(writer, sheet_name='All Features', index=False)
-            with pd.ExcelWriter(sep_excel_path, engine='xlsxwriter') as writer:
+                df.drop(
+                    columns=['Image Name']
+                ).to_excel(
+                    writer,
+                    sheet_name='All Features',
+                    index=False
+                )
+                
+            with pd.ExcelWriter( sep_excel_path, engine='xlsxwriter' ) as writer:
                 for feature in self.get_selected_techniques():
-                    cols = [c for c in df.columns if c.startswith(feature)] + ['Image Name']
-                    df[cols].to_excel(writer, sheet_name=f'{feature.upper()} Features', index=False)
-            self.log(f"Analysis complete. Results saved to:\n{all_csv_path},\n{all_excel_path}, and\n{sep_excel_path}")
+                    cols = \
+                        [c for c in df.columns if c.startswith(feature)] +\
+                        ['Image Name']
+                    df[cols].to_excel(
+                        writer,
+                        sheet_name=f'{feature.upper()} Features',
+                        index=False
+                    )
+            self.log(
+                f"Analysis complete. Results saved to:\n{all_csv_path},\n{all_excel_path}, and\n{sep_excel_path}"
+            )
         else:
             self.log("No data to write.")
 
@@ -443,7 +745,6 @@ class RadiomicsApp:
             pass
         finally:
             self.root.after(100, self.update_progress_from_queue)
-
 
 # Launch GUI
 if __name__ == "__main__":

@@ -1,0 +1,132 @@
+name: Build MitoTex Cross-Platform Executables
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+        python-version: ['3.9']  # Match your venv Python version
+        
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3.9-dev \
+          python3-tk \
+          libgl1-mesa-glx \
+          libglib2.0-0 \
+          gcc \
+          g++
+    
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install tcl-tk
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install numpy==1.25.1
+        pip install --no-build-isolation -r doc/__requirements.txt
+        pip install pyinstaller
+    
+    - name: Create version file
+      run: |
+        python -c "import json; json.dump({'commit': '${{ github.sha }}'[:7], 'branch': '${{ github.ref_name }}', 'date': '${{ github.event.head_commit.timestamp }}'}, open('version.json', 'w'))"
+    
+    - name: Build executable (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        pyinstaller --onefile \
+          --windowed \
+          --name=MitoTex-Linux \
+          --add-data "doc/logos:doc/logos" \
+          --hidden-import=numpy.core._multiarray_umath \
+          --hidden-import=numpy._core._multiarray_umath \
+          --hidden-import=radiomics \
+          --hidden-import=radiomics.featureextractor \
+          --hidden-import=SimpleITK \
+          --hidden-import=PIL \
+          --hidden-import=PIL.Image \
+          --hidden-import=PIL.ImageTk \
+          --hidden-import=ttkbootstrap \
+          --hidden-import=cv2 \
+          --hidden-import=pandas \
+          --hidden-import=sklearn \
+          --hidden-import=sklearn.tree \
+          --hidden-import=sklearn.svm \
+          --hidden-import=sklearn.model_selection \
+          --hidden-import=sklearn.metrics \
+          --hidden-import=sklearn.ensemble \
+          --hidden-import=sklearn.feature_selection \
+          --collect-all radiomics \
+          --collect-all ttkbootstrap \
+          src/Mito_feature_extraction_gui.py
+    
+    - name: Build executable (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        pyinstaller --onefile \
+          --windowed \
+          --name=MitoTex-macOS \
+          --add-data "doc/logos:doc/logos" \
+          --hidden-import=numpy.core._multiarray_umath \
+          --hidden-import=numpy._core._multiarray_umath \
+          --hidden-import=radiomics \
+          --hidden-import=radiomics.featureextractor \
+          --hidden-import=SimpleITK \
+          --hidden-import=PIL \
+          --hidden-import=PIL.Image \
+          --hidden-import=PIL.ImageTk \
+          --hidden-import=ttkbootstrap \
+          --hidden-import=cv2 \
+          --hidden-import=pandas \
+          --hidden-import=sklearn \
+          --hidden-import=sklearn.tree \
+          --hidden-import=sklearn.svm \
+          --hidden-import=sklearn.model_selection \
+          --hidden-import=sklearn.metrics \
+          --hidden-import=sklearn.ensemble \
+          --hidden-import=sklearn.feature_selection \
+          --collect-all radiomics \
+          --collect-all ttkbootstrap \
+          src/Mito_feature_extraction_gui.py
+    
+    - name: Build executable (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        pyinstaller --onefile --windowed --name=MitoTex-Windows --add-data "doc/logos;doc/logos" --hidden-import=numpy.core._multiarray_umath --hidden-import=numpy._core._multiarray_umath --hidden-import=radiomics --hidden-import=radiomics.featureextractor --hidden-import=SimpleITK --hidden-import=PIL --hidden-import=PIL.Image --hidden-import=PIL.ImageTk --hidden-import=ttkbootstrap --hidden-import=cv2 --hidden-import=pandas --hidden-import=sklearn --hidden-import=sklearn.tree --hidden-import=sklearn.svm --hidden-import=sklearn.model_selection --hidden-import=sklearn.metrics --hidden-import=sklearn.ensemble --hidden-import=sklearn.feature_selection --collect-all radiomics --collect-all ttkbootstrap src/Mito_feature_extraction_gui.py
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MitoTex-${{ runner.os }}-${{ matrix.python-version }}
+        path: dist/*
+        retention-days: 30
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

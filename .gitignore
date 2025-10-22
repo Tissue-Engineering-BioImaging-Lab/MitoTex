@@ -195,3 +195,6 @@ cython_debug/
 *.csv
 *.tif
 *.tiff
+
+# lost and found R files
+*.Rhistory*

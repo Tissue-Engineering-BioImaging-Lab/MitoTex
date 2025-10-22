@@ -8,17 +8,29 @@ This project uses texture-based image analysis and machine learning to extract q
 
 -   Python 3.9+
 -   Python packages:
-    -   numpy\>=1.9.2
-    -   pandas
-    -   SimpleITK
-    -   Pillow
-    -   radiomics
-    -   scikit-learn
-    -   scikit-image
-    -   matplotlib
-    -   xlsxwriter
-    -   tk
-    -   ttkbootstrap
+
+### Throubleshootting pyradiomics missing headers
+
+```bash
+apt-get install software-properties-common
+add-apt-repository ppa:deadsnakes/ppa
+apt-get update
+apt-get install python3.9
+apt-get install python3.9-venv
+apt-get install python3.9-dev
+
+# Install all module except pyradiomics
+grep -v pyradiomics requirements.txt | pip install -r /dev/stdin
+# The pyradiomics package includes C extensions (radiomics._cmatrices) that need to be compiled. To compile C code that interfaces with Python, you need:
+pip install numpy==1.25.1 Cython
+pip install --no-build-isolation pyradiomics==3.0.1
+```
+
+### Throubleshootting old python3.9-tkinter 
+
+```bash
+sudo apt-get install python3.9-tk
+```
 
 Install dependencies with:
 
