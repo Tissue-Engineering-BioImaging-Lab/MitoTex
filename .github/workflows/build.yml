@@ -30,42 +30,81 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
+        sudo apt-get install -y software-properties-common
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+        sudo apt-get update
         sudo apt-get install -y \
+          python3.9 \
+          python3.9-venv \
           python3.9-dev \
           python3-tk \
           libgl1-mesa-glx \
           libglib2.0-0 \
           gcc \
-          g++
+          g++ \
+          build-essential
     
     - name: Install system dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
         brew install tcl-tk
     
-    - name: Install Python dependencies
+    - name: Install system dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install -y visualstudio2019buildtools
+        choco install -y visualstudio2019-workload-vctools
+    
+    - name: Upgrade pip and install build tools
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        pip install numpy==1.25.1
-        # Check if requirements file exists before installing
+    
+    - name: Install numpy and Cython (required for pyradiomics)
+      run: |
+        pip install numpy==1.25.1 Cython
+    
+    - name: Install Python dependencies (excluding pyradiomics)
+      run: |
         if [ -f "requirements.txt" ]; then
-          pip install --no-build-isolation -r requirements.txt
-        elif [ -f "requirements.txt" ]; then
-          pip install -r requirements.txt
+          grep -v pyradiomics requirements.txt > temp_requirements.txt
+          pip install -r temp_requirements.txt
+          rm temp_requirements.txt
         else
-          echo "No requirements file found, installing common dependencies..."
-          pip install opencv-python pillow pandas scikit-learn pyradiomics simpleitk ttkbootstrap
+          echo "No requirements.txt found, installing common dependencies..."
+          pip install opencv-python pillow pandas scikit-learn simpleitk ttkbootstrap
         fi
-        pip install pyinstaller==6.3.0
       shell: bash
+    
+    - name: Install pyradiomics with no build isolation
+      run: |
+        pip install --no-build-isolation pyradiomics==3.0.1
+    
+    - name: Install PyInstaller
+      run: |
+        pip install pyinstaller==6.3.0
     
     - name: Verify source file exists
       run: |
         if [ ! -f "mito_feature_extraction_gui.py" ]; then
           echo "Error: Source file not found!"
+          echo "Contents of current directory:"
+          ls -la
           exit 1
         fi
         echo "Source file found."
+      shell: bash
+    
+    - name: Verify doc/logos directory exists
+      run: |
+        if [ ! -d "doc/logos" ]; then
+          echo "Warning: doc/logos directory not found!"
+          echo "Contents of doc directory:"
+          ls -la doc/ || echo "doc directory does not exist"
+          mkdir -p doc/logos
+          echo "Created empty doc/logos directory"
+        else
+          echo "doc/logos directory found."
+        fi
       shell: bash
     
     - name: Create version file
@@ -79,10 +118,12 @@ jobs:
           --windowed \
           --name=MitoTex-Linux \
           --add-data "doc/logos:doc/logos" \
+          --add-data "version.json:." \
           --hidden-import=numpy.core._multiarray_umath \
           --hidden-import=numpy._core._multiarray_umath \
           --hidden-import=radiomics \
           --hidden-import=radiomics.featureextractor \
+          --hidden-import=radiomics._cmatrices \
           --hidden-import=SimpleITK \
           --hidden-import=PIL \
           --hidden-import=PIL.Image \
@@ -109,10 +150,12 @@ jobs:
           --windowed \
           --name=MitoTex-macOS \
           --add-data "doc/logos:doc/logos" \
+          --add-data "version.json:." \
           --hidden-import=numpy.core._multiarray_umath \
           --hidden-import=numpy._core._multiarray_umath \
           --hidden-import=radiomics \
           --hidden-import=radiomics.featureextractor \
+          --hidden-import=radiomics._cmatrices \
           --hidden-import=SimpleITK \
           --hidden-import=PIL \
           --hidden-import=PIL.Image \
@@ -135,7 +178,16 @@ jobs:
     - name: Build executable (Windows)
       if: runner.os == 'Windows'
       run: |
-        pyinstaller --onefile --windowed --name=MitoTex-Windows --add-data "doc/logos;doc/logos" --hidden-import=numpy.core._multiarray_umath --hidden-import=numpy._core._multiarray_umath --hidden-import=radiomics --hidden-import=radiomics.featureextractor --hidden-import=SimpleITK --hidden-import=PIL --hidden-import=PIL.Image --hidden-import=PIL.ImageTk --hidden-import=ttkbootstrap --hidden-import=cv2 --hidden-import=pandas --hidden-import=sklearn --hidden-import=sklearn.tree --hidden-import=sklearn.svm --hidden-import=sklearn.model_selection --hidden-import=sklearn.metrics --hidden-import=sklearn.ensemble --hidden-import=sklearn.feature_selection --collect-all radiomics --collect-all ttkbootstrap --log-level DEBUG src/Mito_feature_extraction_gui.py
+        pyinstaller --onefile --windowed --name=MitoTex-Windows --add-data "doc/logos;doc/logos" --add-data "version.json;." --hidden-import=numpy.core._multiarray_umath --hidden-import=numpy._core._multiarray_umath --hidden-import=radiomics --hidden-import=radiomics.featureextractor --hidden-import=radiomics._cmatrices --hidden-import=SimpleITK --hidden-import=PIL --hidden-import=PIL.Image --hidden-import=PIL.ImageTk --hidden-import=ttkbootstrap --hidden-import=cv2 --hidden-import=pandas --hidden-import=sklearn --hidden-import=sklearn.tree --hidden-import=sklearn.svm --hidden-import=sklearn.model_selection --hidden-import=sklearn.metrics --hidden-import=sklearn.ensemble --hidden-import=sklearn.feature_selection --collect-all radiomics --collect-all ttkbootstrap --log-level DEBUG mito_feature_extraction_gui.py
+    
+    - name: List build output
+      if: always()
+      run: |
+        echo "Contents of dist directory:"
+        ls -la dist/ || echo "dist directory does not exist"
+        echo "Contents of build directory:"
+        ls -la build/ || echo "build directory does not exist"
+      shell: bash
     
     - name: Upload build logs on failure
       if: failure()
@@ -145,6 +197,7 @@ jobs:
         path: |
           build/
           *.spec
+          *.log
         retention-days: 7
     
     - name: Upload artifact
