@@ -5,14 +5,15 @@ on:
     branches: [ contesini_quick-refact-for-deployment ]
   pull_request:
     branches: [ contesini_quick-refact-for-deployment ]
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
     strategy:
+      fail-fast: false  # Don't cancel other jobs if one fails
       matrix:
         os: [ubuntu-22.04, windows-latest, macos-latest]
-        python-version: ['3.9']  # Match your venv Python version
+        python-version: ['3.9']
         
     runs-on: ${{ matrix.os }}
     
@@ -46,8 +47,26 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install numpy==1.25.1
-        pip install --no-build-isolation -r doc/__requirements.txt
-        pip install pyinstaller
+        # Check if requirements file exists before installing
+        if [ -f "requirements.txt" ]; then
+          pip install --no-build-isolation -r requirements.txt
+        elif [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        else
+          echo "No requirements file found, installing common dependencies..."
+          pip install opencv-python pillow pandas scikit-learn pyradiomics simpleitk ttkbootstrap
+        fi
+        pip install pyinstaller==6.3.0
+      shell: bash
+    
+    - name: Verify source file exists
+      run: |
+        if [ ! -f "mito_feature_extraction_gui.py" ]; then
+          echo "Error: Source file not found!"
+          exit 1
+        fi
+        echo "Source file found."
+      shell: bash
     
     - name: Create version file
       run: |
@@ -80,7 +99,8 @@ jobs:
           --hidden-import=sklearn.feature_selection \
           --collect-all radiomics \
           --collect-all ttkbootstrap \
-          src/Mito_feature_extraction_gui.py
+          --log-level DEBUG \
+          mito_feature_extraction_gui.py
     
     - name: Build executable (macOS)
       if: runner.os == 'macOS'
@@ -109,14 +129,26 @@ jobs:
           --hidden-import=sklearn.feature_selection \
           --collect-all radiomics \
           --collect-all ttkbootstrap \
-          src/Mito_feature_extraction_gui.py
+          --log-level DEBUG \
+          mito_feature_extraction_gui.py
     
     - name: Build executable (Windows)
       if: runner.os == 'Windows'
       run: |
-        pyinstaller --onefile --windowed --name=MitoTex-Windows --add-data "doc/logos;doc/logos" --hidden-import=numpy.core._multiarray_umath --hidden-import=numpy._core._multiarray_umath --hidden-import=radiomics --hidden-import=radiomics.featureextractor --hidden-import=SimpleITK --hidden-import=PIL --hidden-import=PIL.Image --hidden-import=PIL.ImageTk --hidden-import=ttkbootstrap --hidden-import=cv2 --hidden-import=pandas --hidden-import=sklearn --hidden-import=sklearn.tree --hidden-import=sklearn.svm --hidden-import=sklearn.model_selection --hidden-import=sklearn.metrics --hidden-import=sklearn.ensemble --hidden-import=sklearn.feature_selection --collect-all radiomics --collect-all ttkbootstrap src/Mito_feature_extraction_gui.py
+        pyinstaller --onefile --windowed --name=MitoTex-Windows --add-data "doc/logos;doc/logos" --hidden-import=numpy.core._multiarray_umath --hidden-import=numpy._core._multiarray_umath --hidden-import=radiomics --hidden-import=radiomics.featureextractor --hidden-import=SimpleITK --hidden-import=PIL --hidden-import=PIL.Image --hidden-import=PIL.ImageTk --hidden-import=ttkbootstrap --hidden-import=cv2 --hidden-import=pandas --hidden-import=sklearn --hidden-import=sklearn.tree --hidden-import=sklearn.svm --hidden-import=sklearn.model_selection --hidden-import=sklearn.metrics --hidden-import=sklearn.ensemble --hidden-import=sklearn.feature_selection --collect-all radiomics --collect-all ttkbootstrap --log-level DEBUG src/Mito_feature_extraction_gui.py
+    
+    - name: Upload build logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ runner.os }}
+        path: |
+          build/
+          *.spec
+        retention-days: 7
     
     - name: Upload artifact
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: MitoTex-${{ runner.os }}-${{ matrix.python-version }}
