@@ -2,9 +2,9 @@ name: Build MitoTex Cross-Platform Executables
 
 on:
   push:
-    branches: [ main ]
+    branches: [ contesini_quick-refact-for-deployment ]
   pull_request:
-    branches: [ main ]
+    branches: [ contesini_quick-refact-for-deployment ]
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
