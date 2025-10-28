@@ -32,7 +32,26 @@ pip install --no-build-isolation pyradiomics==3.0.1
 sudo apt-get install python3.9-tk
 ```
 
-Install dependencies with:
+### Troubleshooting old python3.9-tkinter
+``` bash
+apt-get install software-properties-common
+add-apt-repository ppa:deadsnakes/ppa
+apt-get update
+apt-get install python3.9
+apt-get install python3.9-venv
+apt-get install python3.9-dev
+
+# Install all module except pyradiomics
+grep -v pyradiomics requirements.txt | pip install -r /dev/stdin
+# The pyradiomics package includes C extensions (radiomics._cmatrices) that need to be compiled. To compile C code that interfaces with Python, you need:
+pip install numpy==1.25.1 Cython
+pip install --no-build-isolation pyradiomics==3.0.1
+```
+### Troubleshooting old python3.9-tkinter
+``` bash
+sudo apt-get install python3.9-tk
+```
+### Install dependencies with:
 
 ``` bash
 pip install -r requirements.txt
