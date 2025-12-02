@@ -241,11 +241,11 @@ class RadiomicsApp:
         bottom_frame.columnconfigure(0, weight=1)
         bottom_frame.columnconfigure(1, weight=1)
 
-        self.logo1_img = Image.open(r"C:\Users\Amulya\Documents\Mitochondrial_Texture_Analysis\src\logos\TEAMHub.jpg")
+        self.logo1_img = Image.open(r"logos\TEAMHub.jpg")
         self.logo1_img = self.logo1_img.resize((120, 60), Image.Resampling.LANCZOS)
         self.logo1_photo = ImageTk.PhotoImage(self.logo1_img)
 
-        self.logo2_img = Image.open(r"C:\Users\Amulya\Documents\Mitochondrial_Texture_Analysis\src\logos\TEBLab.jpg")
+        self.logo2_img = Image.open(r"logos\TEBLab.jpg")
         self.logo2_img = self.logo2_img.resize((120, 60), Image.Resampling.LANCZOS)
         self.logo2_photo = ImageTk.PhotoImage(self.logo2_img)
 
