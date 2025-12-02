@@ -115,6 +115,7 @@ class RadiomicsApp:
         self.root = root
         self.root.title("Mitochondria Texture Analysis User Interface")
         self.root.geometry("1200x860")
+        self.root.minsize(900, 700)
 
         # ---------------------------
         # Variables
@@ -136,7 +137,16 @@ class RadiomicsApp:
         # Main container frame
         # ---------------------------
         main_frame = ttk.Frame(root)
-        main_frame.pack(fill="both", expand=True, padx=12, pady=6)
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=12, pady=6)
+        root.rowconfigure(0, weight=1)
+        root.columnconfigure(0, weight=1)
+
+        # Configure rows and columns for expansion
+        for i in range(20):
+            main_frame.rowconfigure(i, weight=0)
+        main_frame.rowconfigure(6, weight=1)  # Log area expands
+        main_frame.rowconfigure(8, weight=1)  # ML report expands
+        main_frame.columnconfigure(0, weight=1)
 
         # ---------------------------
         # Title
@@ -146,6 +156,9 @@ class RadiomicsApp:
             font=("Segoe UI", 18, "bold"), foreground="white"
         )
         title_lbl.pack(pady=(6, 12))
+        title_lbl = ttk.Label(main_frame, text="MitoTex",
+                              font=("Segoe UI", 18, "bold"), foreground="white")
+        title_lbl.grid(row=0, column=0, sticky="w", pady=(6, 12))
 
         # ---------------------------
         # File selection
@@ -223,6 +236,17 @@ class RadiomicsApp:
             side="left",
             padx=4
         )
+        file_frame = ttk.Labelframe(main_frame, text=" File Selection ", bootstyle="secondary")
+        file_frame.grid(row=1, column=0, sticky="ew", padx=6, pady=6)
+        file_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(file_frame, text="Input Folder:", width=15, foreground="white").grid(row=0, column=0, sticky="w", padx=4, pady=2)
+        ttk.Entry(file_frame, textvariable=self.input_dir).grid(row=0, column=1, sticky="ew", padx=4, pady=2)
+        ttk.Button(file_frame, text="Browse", command=self.browse_input, bootstyle="primary-outline").grid(row=0, column=2, padx=4, pady=2)
+
+        ttk.Label(file_frame, text="Output Folder:", width=15, foreground="white").grid(row=1, column=0, sticky="w", padx=4, pady=2)
+        ttk.Entry(file_frame, textvariable=self.output_dir).grid(row=1, column=1, sticky="ew", padx=4, pady=2)
+        ttk.Button(file_frame, text="Browse", command=self.browse_output, bootstyle="primary-outline").grid(row=1, column=2, padx=4, pady=2)
 
         # ---------------------------
         # Texture techniques
@@ -250,6 +274,10 @@ class RadiomicsApp:
                 padx=6, 
                 pady=4
             )
+        tech_frame = ttk.Labelframe(main_frame, text=" Texture Techniques ", bootstyle="secondary")
+        tech_frame.grid(row=2, column=0, sticky="ew", padx=6, pady=6)
+        for idx, (tech, var) in enumerate(self.techniques.items()):
+            ttk.Checkbutton(tech_frame, text=tech.upper(), variable=var, bootstyle="info").grid(row=0, column=idx, padx=6, pady=4)
 
         # ---------------------------
         # Run buttons
@@ -274,6 +302,10 @@ class RadiomicsApp:
             side="left",
             padx=6
         )
+        btn_frame.grid(row=3, column=0, sticky="ew", pady=6)
+        btn_frame.columnconfigure((0, 1), weight=1)
+        ttk.Button(btn_frame, text="Run Analysis", command=self.run_analysis_thread, bootstyle="success").grid(row=0, column=0, padx=6)
+        ttk.Button(btn_frame, text="Run RFE Filter", command=self.handle_rfe_filter, bootstyle="warning").grid(row=0, column=1, padx=6)
 
         # ---------------------------
         # Progress bar + label
@@ -308,6 +340,13 @@ class RadiomicsApp:
             100,
             self.update_progress_from_queue
         )
+        prog_frame = ttk.Frame(main_frame)
+        prog_frame.grid(row=4, column=0, sticky="ew", pady=6)
+        prog_frame.columnconfigure(0, weight=1)
+        self.progress = ttk.Progressbar(prog_frame, orient='horizontal', mode='determinate')
+        self.progress.grid(row=0, column=0, sticky="ew", padx=4)
+        self.progress_label = ttk.Label(prog_frame, text="Progress: 0%", foreground="white")
+        self.progress_label.grid(row=0, column=1, sticky="w", padx=6)
 
         # ---------------------------
         # Log area
@@ -336,6 +375,12 @@ class RadiomicsApp:
             padx=4,
             pady=4
         )
+        log_frame = ttk.Labelframe(main_frame, text=" Log ", bootstyle="secondary")
+        log_frame.grid(row=6, column=0, sticky="nsew", padx=6, pady=6)
+        log_frame.rowconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=12, bg="#111214", fg="white", insertbackground="white")
+        self.log_text.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
 
         # ---------------------------
         # ML options
@@ -421,6 +466,22 @@ class RadiomicsApp:
         ).pack(
             pady=6
         )
+        ml_frame = ttk.Labelframe(main_frame, text=" Machine Learning ", bootstyle="secondary")
+        ml_frame.grid(row=7, column=0, sticky="ew", padx=6, pady=6)
+
+        classifier_frame = ttk.Frame(ml_frame)
+        classifier_frame.grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Label(classifier_frame, text="Classifier:", width=12, foreground="white").grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(classifier_frame, text="SVM", variable=self.classifier_var, value="svm", bootstyle="info").grid(row=0, column=1, padx=4)
+        ttk.Radiobutton(classifier_frame, text="Decision Tree", variable=self.classifier_var, value="decision_tree", bootstyle="info").grid(row=0, column=2, padx=4)
+
+        type_frame = ttk.Frame(ml_frame)
+        type_frame.grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(type_frame, text="Data Type:", width=12, foreground="white").grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(type_frame, text="Binary", variable=self.data_type_var, value="binary", bootstyle="info").grid(row=0, column=1, padx=4)
+        ttk.Radiobutton(type_frame, text="Multiclass", variable=self.data_type_var, value="multiclass", bootstyle="info").grid(row=0, column=2, padx=4)
+
+        ttk.Button(ml_frame, text="Run ML Pipeline", command=lambda: threading.Thread(target=self.on_ml_button_click).start(), bootstyle="primary").grid(row=2, column=0, pady=6, sticky="w")
 
         # ---------------------------
         # ML report
@@ -454,12 +515,22 @@ class RadiomicsApp:
             padx=4,
             pady=4
         )
+        report_frame = ttk.Labelframe(main_frame, text=" ML Report ", bootstyle="secondary")
+        report_frame.grid(row=8, column=0, sticky="nsew", padx=6, pady=6)
+        report_frame.rowconfigure(0, weight=1)
+        report_frame.columnconfigure(0, weight=1)
+        mono_font = tkFont.Font(family="Courier New", size=10)
+        self.report_text = tk.Text(report_frame, height=12, bg="#0f1112", fg="white",
+                                   insertbackground="white", font=mono_font)
+        self.report_text.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
 
         # ---------------------------
         # Bottom frame
         # ---------------------------
         bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.pack(fill="x", pady=12)
+        bottom_frame.grid(row=9, column=0, sticky="ew", pady=12)
+        bottom_frame.columnconfigure(0, weight=1)
+        bottom_frame.columnconfigure(1, weight=1)
 
         if sys.platform == "win32":
             self.logo1_img = Image.open(f"{os.path.dirname(os.path.abspath(__file__))}\doc\logos\TEAMHub.jpg")
@@ -514,6 +585,13 @@ class RadiomicsApp:
             padx=12
         )
 
+        ttk.Label(bottom_frame, image=self.logo1_photo).grid(row=0, column=0, sticky="w", padx=12)
+        ttk.Label(bottom_frame, image=self.logo2_photo).grid(row=0, column=1, sticky="e", padx=12)
+
+        buttons_frame = ttk.Frame(bottom_frame)
+        buttons_frame.grid(row=1, column=0, columnspan=2, pady=6)
+        ttk.Button(buttons_frame, text="Start", command=self.run_analysis_thread, bootstyle="success").grid(row=0, column=0, padx=12)
+        ttk.Button(buttons_frame, text="Exit", command=root.destroy, bootstyle="danger").grid(row=0, column=1, padx=12)
     # =============================
     # Directory selection
     # =============================
