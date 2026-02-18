@@ -1,20 +1,22 @@
-import sys as sys 
-import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext, ttk
 import os
-import logging
-import SimpleITK as sitk
-import radiomics
-from radiomics.featureextractor import RadiomicsFeatureExtractor as featureextractor
-import pandas as pd
-import numpy as np
-import threading
 import queue
+import logging
+import threading
 import cv2 as cv2
+import sys as sys 
+import numpy as np
+import pandas as pd
 from PIL import Image, ImageTk
+
+import SimpleITK as sitk
+import tkinter as tk
+import tkinter.font as tkFont
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-import tkinter.font as tkFont
+
+import radiomics
+from radiomics.featureextractor import RadiomicsFeatureExtractor as featureextractor
 
 # ML imports: functions from the script machine_learning_code.py
 from src.machine_learning_code import (
@@ -28,12 +30,12 @@ from src.RFE_feature_selection import run_rfe_feature_selection  # Custom RFE sc
 # =============================
 # Helper functions
 # =============================
-def rename_columns(col):
+def rename_columns( col ):
     """Clean up column names from Pyradiomics output for readability."""
     return col.replace('original_', '') if col.startswith('original_') else col
 
 # Create a binary mask using Otsu thresholding
-def create_thresholded_mask(image_np):
+def create_thresholded_mask( image_np ):
     """
     Convert raw microscopy image to a binary mask using Otsu thresholding.
 
@@ -58,7 +60,7 @@ def create_thresholded_mask(image_np):
     _, mask = cv2.threshold(image_8bit, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return mask.astype(np.uint8)
 
-def process_image_file(image_path, extractor):
+def process_image_file( image_path, extractor ):
     """
     Extract radiomic features from a single biological image.
 
@@ -108,8 +110,8 @@ def process_image_file(image_path, extractor):
 # =============================
 class RadiomicsApp:
     """
-    Graphical user interface (GUI) for radiomics feature extraction and ML classification
-    of microscopy images of the mitochondria
+    Graphical user interface (GUI) for radiomics feature extraction and ML
+    classification of microscopy images of the mitochondria
     """
     def __init__(self, root):
         self.root = root
@@ -156,13 +158,12 @@ class RadiomicsApp:
             font=("Segoe UI", 18, "bold"), foreground="white"
         )
         title_lbl.pack(pady=(6, 12))
-        title_lbl = ttk.Label(main_frame, text="MitoTex",
-                              font=("Segoe UI", 18, "bold"), foreground="white")
         title_lbl.grid(row=0, column=0, sticky="w", pady=(6, 12))
 
         # ---------------------------
         # File selection
         # ---------------------------
+        
         file_frame = ttk.Labelframe(
             main_frame,
             text=" File Selection ",
@@ -173,6 +174,56 @@ class RadiomicsApp:
             padx=6,
             pady=6
         )
+        file_frame.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            padx=6,
+            pady=6
+        )
+        file_frame.columnconfigure(
+            1,
+            weight=1
+        )
+
+        ttk.Label(
+            file_frame,
+            text="Output Folder:",
+            width=15,
+            foreground="white"
+        ).grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=4,
+            pady=2
+        )
+        
+        ttk.Entry(
+            file_frame,
+            textvariable=self.output_dir
+        ).grid(
+            row=1,
+            column=1,
+            sticky="ew",
+            padx=4,
+            pady=2
+        )
+        
+        ttk.Button(
+            file_frame,
+            text="Browse",
+            command=self.browse_output,
+            bootstyle="primary-outline"
+        ).grid(
+            row=1,
+            column=2,
+            padx=4,
+            pady=2
+        )
+
+
+
 
         input_row = ttk.Frame( file_frame )
         input_row.pack(
@@ -236,17 +287,6 @@ class RadiomicsApp:
             side="left",
             padx=4
         )
-        file_frame = ttk.Labelframe(main_frame, text=" File Selection ", bootstyle="secondary")
-        file_frame.grid(row=1, column=0, sticky="ew", padx=6, pady=6)
-        file_frame.columnconfigure(1, weight=1)
-
-        ttk.Label(file_frame, text="Input Folder:", width=15, foreground="white").grid(row=0, column=0, sticky="w", padx=4, pady=2)
-        ttk.Entry(file_frame, textvariable=self.input_dir).grid(row=0, column=1, sticky="ew", padx=4, pady=2)
-        ttk.Button(file_frame, text="Browse", command=self.browse_input, bootstyle="primary-outline").grid(row=0, column=2, padx=4, pady=2)
-
-        ttk.Label(file_frame, text="Output Folder:", width=15, foreground="white").grid(row=1, column=0, sticky="w", padx=4, pady=2)
-        ttk.Entry(file_frame, textvariable=self.output_dir).grid(row=1, column=1, sticky="ew", padx=4, pady=2)
-        ttk.Button(file_frame, text="Browse", command=self.browse_output, bootstyle="primary-outline").grid(row=1, column=2, padx=4, pady=2)
 
         # ---------------------------
         # Texture techniques
