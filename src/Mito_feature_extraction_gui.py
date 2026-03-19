@@ -125,7 +125,7 @@ class RadiomicsApp:
         }
         self.classifier_var = tk.StringVar(value="decision_tree")
         self.data_type_var = tk.StringVar(value="binary")
-
+        self.progress_queue = queue.Queue()
         # ---------------------------
         # Main container frame
         # ---------------------------
@@ -256,6 +256,7 @@ class RadiomicsApp:
         buttons_frame.grid(row=1, column=0, columnspan=2, pady=6)
         ttk.Button(buttons_frame, text="Start", command=self.run_analysis_thread, bootstyle="success").grid(row=0, column=0, padx=12)
         ttk.Button(buttons_frame, text="Exit", command=root.destroy, bootstyle="danger").grid(row=0, column=1, padx=12)
+        self.root.after(100, self.update_progress_from_queue)
     # =============================
     # Directory selection
     # =============================
